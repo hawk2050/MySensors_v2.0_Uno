@@ -89,7 +89,7 @@ https://forum.mysensors.org/topic/4276/converting-a-sketch-from-1-5-x-to-2-0-x/2
 /*****************************/
 
 //Create an instance of the object
-float lastTemperature[MAX_ATTACHED_DS18B20];
+float lastTemperature;
 int numSensors=0;
 // Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
 OneWire oneWire(ONE_WIRE_BUS);
@@ -180,59 +180,14 @@ void loop()
 
   measureBattery(forceTransmit);
 
-  readHTU21DTemperature(forceTransmit);
-  readHTU21DHumidity(forceTransmit);
+
 
   sleep(SLEEP_TIME);
 
 
 }
 
-void readHTU21DTemperature(bool force)
-{
-  static float lastTemp = 0;
 
-  if (force)
-  {
-   lastTemp = -100;
-  }
-  float temp = myHumidity.readTemperature();
-
-  if(lastTemp != temp)
-  {
-    send(msgTemp.set(temp,1));
-    lastTemp = temp;
-    #ifdef DEBUG_RCC
-    Serial.print(" Temperature:");
-    Serial.print(temp, 1);
-    Serial.print("C");
-    Serial.println();
-    #endif
-  }
-}
-
-void readHTU21DHumidity(bool force)
-{
-  static float lastHumidity = 0;
-
-  if (force)
-  {
-    lastHumidity = -100;
-  }
-  float humd = myHumidity.readHumidity();
-
-  if(lastHumidity != humd)
-  {
-    send(msgHum.set(humd,1));
-    lastHumidity = humd;
-    #ifdef DEBUG_RCC
-    Serial.print(" Humidity:");
-    Serial.print(humd, 1);
-    Serial.print("%");
-    Serial.println();
-    #endif
-  }
-}
 
 
 uint16_t measureBattery(bool force)
