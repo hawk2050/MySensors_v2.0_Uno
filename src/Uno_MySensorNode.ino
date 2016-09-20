@@ -48,10 +48,11 @@ https://forum.mysensors.org/topic/4276/converting-a-sketch-from-1-5-x-to-2-0-x/2
  #define MY_RADIO_NRF24
  //#define MY_RADIO_RFM69
 
- #define MY_NODE_ID 20
+ #define MY_NODE_ID 21
  /*Makes this static so won't try and find another parent if communication with
  gateway fails*/
  #define MY_PARENT_NODE_ID 0
+ #define MY_PARENT_NODE_IS_STATIC
 
  /*These are actually the default pins expected by the MySensors framework.
   * This means we can use the default constructor without arguments when
@@ -62,10 +63,14 @@ https://forum.mysensors.org/topic/4276/converting-a-sketch-from-1-5-x-to-2-0-x/2
  #define MY_RF24_CS_PIN 10
  #define MY_RF24_CHANNEL 100
 
-//#include <SPI.h>
+
 #include <MySensors.h>
-#include <Wire.h>
-#include "SparkFunHTU21D.h"
+#include <OneWire.h>
+#include <DallasTemperature.h>
+//#include <Wire.h>
+
+#define ONE_WIRE_BUS 14 //(A0)
+
 //#include <stdint.h>
 //#include <math.h>
 
@@ -75,7 +80,7 @@ https://forum.mysensors.org/topic/4276/converting-a-sketch-from-1-5-x-to-2-0-x/2
 //#define SLEEP_TIME 300000
 #define SLEEP_TIME 5000
 
-#define CHILD_ID_HUMIDITY 0
+
 #define CHILD_ID_TEMP 1
 #define CHILD_ID_VOLTAGE 2
 
@@ -84,9 +89,15 @@ https://forum.mysensors.org/topic/4276/converting-a-sketch-from-1-5-x-to-2-0-x/2
 /*****************************/
 
 //Create an instance of the object
-HTU21D myHumidity;
-MyMessage msgHum(CHILD_ID_HUMIDITY, V_HUM);
-MyMessage msgTemp(CHILD_ID_TEMP, V_TEMP);
+float lastTemperature[MAX_ATTACHED_DS18B20];
+int numSensors=0;
+// Setup a oneWire instance to communicate with any OneWire devices (not just Maxim/Dallas temperature ICs)
+OneWire oneWire(ONE_WIRE_BUS);
+// Pass our oneWire reference to Dallas Temperature.
+DallasTemperature dallas_sensor(&oneWire);
+// Initialize temperature message
+MyMessage msgDallas(CHILD_ID_TEMP, V_TEMP);
+void readDS18B20(bool force);
 
 uint16_t measureBattery(bool force);
 MyMessage msgVolt(CHILD_ID_VOLTAGE, V_VOLTAGE);
@@ -130,17 +141,16 @@ initialised.*/
 void setup()
 {
   analogReference(INTERNAL);
-  myHumidity.begin();
+  dallas_sensor.begin();
 
 }
 
 void presentation()
 {
    // Send the sketch version information to the gateway and Controller
-   sendSketchInfo("mys_v11-temp-hum", "0.5");
+   sendSketchInfo("Uno_TempRepeat", "0.5");
    // Register all sensors to gateway (they will be created as child devices)
    present(CHILD_ID_VOLTAGE, S_MULTIMETER);
-   present(CHILD_ID_HUMIDITY, S_HUM);
    present(CHILD_ID_TEMP, S_TEMP);
 }
 
@@ -223,50 +233,6 @@ void readHTU21DHumidity(bool force)
     #endif
   }
 }
-
-
-#ifdef SI7021_ENABLE
-void readSI7021TempHumidity(bool force)
-{
-  static float lastTemp = 0;
-  static float lastHum = 0;
-
-  if (force)
-  {
-   lastTemp = -100;
-   lastHum = 0;
-  }
-
-  si7021_env data = myHumidity.getHumidityAndTemperature();
-  float temp = 1.0*data.celsiusHundredths/100;
-  int humd = data.humidityPercent;
-
-  if(lastTemp != temp)
-  {
-    send(msgTemp.set(temp,1));
-    lastTemp = temp;
-    #ifdef DEBUG_RCC
-    Serial.print(" Temperature:");
-    Serial.print(temp, 1);
-    Serial.print("C");
-    Serial.println();
-    #endif
-  }
-
-  if(lastHum != humd)
-  {
-    send(msgHum.set(humd,1));
-    lastHum = humd;
-    #ifdef DEBUG_RCC
-    Serial.print(" Humidity:");
-    Serial.print(humd, 1);
-    Serial.print("%");
-    Serial.println();
-    #endif
-  }
-}
-
-#endif
 
 
 uint16_t measureBattery(bool force)
