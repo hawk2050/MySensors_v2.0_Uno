@@ -41,8 +41,8 @@ https://forum.mysensors.org/topic/4276/converting-a-sketch-from-1-5-x-to-2-0-x/2
  */
 
  // Enable debug prints to serial monitor
- #define MY_DEBUG
- #define DEBUG_RCC 1
+ //#define MY_DEBUG
+ #define DEBUG_RCC 0
 
  // Enable and select radio type attached
  #define MY_RADIO_NRF24
@@ -82,7 +82,8 @@ https://forum.mysensors.org/topic/4276/converting-a-sketch-from-1-5-x-to-2-0-x/2
 
 
 #define CHILD_ID_TEMP 1
-#define CHILD_ID_VOLTAGE 2
+#define CHILD_ID_REG_VOLTAGE 2
+#define CHILD_ID_BAT_VOLTAGE 3
 
 /*****************************/
 /********* FUNCTIONS *********/
@@ -100,10 +101,17 @@ MyMessage msgDallas(CHILD_ID_TEMP, V_TEMP);
 void readDS18B20(bool force);
 
 uint16_t measureBattery(bool force);
-MyMessage msgVolt(CHILD_ID_VOLTAGE, V_VOLTAGE);
+MyMessage msgBatVolt(CHILD_ID_BAT_VOLTAGE, V_VOLTAGE);
+
+uint16_t measureRegulatedVoltage(bool force);
+MyMessage msgRegVolt(CHILD_ID_REG_VOLTAGE, V_VOLTAGE);
 
 uint16_t readVcc();
 void switchClock(unsigned char clk);
+/*Until it's been measured we assume the regulated voltage supplying this
+board is 5000mV exactly
+*/
+uint16_t measuredRegVolt = 5000;
 /*Set true to have clock throttle back, or false to not throttle*/
 bool highfreq = false;
 
@@ -141,27 +149,26 @@ initialised.*/
 void setup()
 {
   analogReference(INTERNAL);
-  dallas_sensor.begin();
+  //dallas_sensor.begin();
 
 }
 
 void presentation()
 {
    // Send the sketch version information to the gateway and Controller
-   sendSketchInfo("Uno_TempRepeat", "0.5");
+   sendSketchInfo("Uno_SolarVolatge", "0.5");
    // Register all sensors to gateway (they will be created as child devices)
-   present(CHILD_ID_VOLTAGE, S_MULTIMETER);
-   present(CHILD_ID_TEMP, S_TEMP);
+   present(CHILD_ID_BAT_VOLTAGE, S_MULTIMETER);
+   present(CHILD_ID_REG_VOLTAGE, S_MULTIMETER);
+   //present(CHILD_ID_TEMP, S_TEMP);
 }
 
 
 void loop()
 {
 
-  bool forceTransmit;
-
-  loopCount++;
-  forceTransmit = false;
+  bool forceTransmit = true;
+  //forceTransmit = false;
   clockSwitchCount++;
 
   // When we wake up the 5th time after power on, switch to 4Mhz clock
@@ -178,19 +185,32 @@ void loop()
     loopCount = 0;
   }
 
+  measureRegulatedVoltage(forceTransmit);
   measureBattery(forceTransmit);
-
-
-
   sleep(SLEEP_TIME);
 
+}//end loop
 
+
+uint16_t measureBattery(bool force)
+{
+  // read the input on analog pin 1:
+  int sensorValue = analogRead(A1);
+  // Convert the analog reading (which goes from 0 - 1023) to a voltage (0 - 5V):
+  uint16_t battvoltage = sensorValue * (1.0*measuredRegVolt / 1023.0);
+
+  send(msgBatVolt.set(battvoltage, 1));
+
+  #if DEBUG_RCC
+  Serial.print("Battery voltage = ");
+  Serial.println(battvoltage);
+  Serial.println('\r');
+  #endif
 }
 
 
 
-
-uint16_t measureBattery(bool force)
+uint16_t measureRegulatedVoltage(bool force)
 {
   static uint16_t lastVcc = 0;
 
@@ -202,7 +222,7 @@ uint16_t measureBattery(bool force)
   uint16_t thisVcc = readVcc();
   if(thisVcc != lastVcc)
   {
-    send(msgVolt.set(thisVcc, 1));
+    send(msgRegVolt.set(thisVcc, 1));
     lastVcc = thisVcc;
     #if DEBUG_RCC
     Serial.print("Battery voltage = ");
